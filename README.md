@@ -4,7 +4,8 @@ Building myself an arcade stick to support different types of consoles/computers
 ## Machines
 These are the machines I want to support.
 
-* * *
+Information on their interfaces can be found at http://gamesx.com/wiki/doku.php?do=index&id=controls
+
 
 ### Mega Drive
 This will be the base machine I will use for testing, I want to support it fully.
@@ -17,11 +18,11 @@ The 6 button mode will be
  * Start button
  * Mode button on 6 button controller
 
-Total number of buttons: 10
+Total number of buttons: 12
 
 #### Port
 
- * 6 data out
+ * 5 data out
  * 1 data in
  * +5V
  * Ground
@@ -31,7 +32,7 @@ See:
  * http://applause.elfmimi.jp/md6bpad-e.html
  * http://www.cs.cmu.edu/~chuck/infopg/segasix.txt
 
-* * *
+
 
 ### Master System
 
@@ -41,7 +42,7 @@ See:
 
 Total number of buttons: 6
 
-* * *
+
 
 ### Super Nintendo
 Support for this is far of in the future.
@@ -53,15 +54,27 @@ Support for this is far of in the future.
  * Start button
  * Select button
  
-Total number of buttons: 10
-
-* * *
+Total number of buttons: 12
 
 
-### Atari ST
+
+### Atari ST/Amiga
+
+It seems the Atari ST and Sega Master System controllers are compatible, except the Master System having +5V at pin 5 instead of pin 7.
 
 #### Buttons
  * 4 directions
  * 1 action button
 
 Total number of buttons: 5
+
+
+
+## Controller hardware
+
+The plan is to use an Arduino nano for reading input and communicating with the different consoles. There will be atleast 12 pins required for the inputs (4 directions, 6 action buttons and Start + mode/select), 
+
+
+The number of required pins for output differentiate between platforms. The Mega Drive requires 6 data pins, the Super Nintendo only have 3 data pins. 
+
+Two of the IO-pins on the Arduino nano can trigger interrupts, so preferably these should be used for input from the hardware, especially for SNES/NES and Mega Drive.
