@@ -32,7 +32,18 @@ See:
  * http://applause.elfmimi.jp/md6bpad-e.html
  * http://www.cs.cmu.edu/~chuck/infopg/segasix.txt
 
+#### Cable
+I'm using the cable from a broken Mega Drive controller. Here are the wire color to pin mapping on this specific cable I'm using.
 
+ * Brown  - UP
+ * Red    - DOWN
+ * Green  - +5V
+ * Gray   - TH
+ * Orange - Left
+ * Yellow - Right
+ * Black  - Ground
+ * White  - Start/C
+ * Blue   - A/B
 
 ### Master System
 
