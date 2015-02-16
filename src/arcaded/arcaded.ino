@@ -1,3 +1,4 @@
+// Using PORT C and PORT D for inputs.
 
 #define PIN_IN_UP  A0
 #define PIN_IN_DOWN  A1
@@ -5,12 +6,12 @@
 #define PIN_IN_RIGHT  A3
 #define PIN_IN_BTN_A  A4
 #define PIN_IN_BTN_B  A5
-#define PIN_IN_BTN_C  A6
+#define PIN_IN_BTN_C  3
 #define PIN_IN_BTN_X  A7
-#define PIN_IN_BTN_Y  13
-#define PIN_IN_BTN_Z  12
-#define PIN_IN_BTN_START  11
-#define PIN_IN_BTN_MODE  10
+#define PIN_IN_BTN_Y  4
+#define PIN_IN_BTN_Z  5
+#define PIN_IN_BTN_START  6
+#define PIN_IN_BTN_MODE  7
 
 
 #define IDX_UP    0
@@ -26,16 +27,32 @@
 #define IDX_START 10
 #define IDX_MODE  11
 
+
+#define IN_MASK_UP    (1u<<0)
+#define IN_MASK_DOWN  (1u<<1)
+#define IN_MASK_LEFT  (1u<<2)
+#define IN_MASK_RIGHT (1u<<3)
+#define IN_MASK_A     (1u<<4)
+#define IN_MASK_B     (1u<<5)
+#define IN_MASK_C     (1u<<6)
+#define IN_MASK_X     (1u<<7)
+#define IN_MASK_Y     (1u<<8)
+#define IN_MASK_Z     (1u<<9)
+#define IN_MASK_START (1u<<10)
+#define IN_MASK_MODE  (1u<<11)
+
+
+
 #define INPUT_COUNT 12
 
 
 // Mega drive conector GPIO pins
 #define MD_PIN_UP         8
-#define MD_PIN_DOWN       7
-#define MD_PIN_0_LEFT     6
-#define MD_PIN_0_RIGHT    5
-#define MD_PIN_START_C    4
-#define MD_PIN_A_B        3
+#define MD_PIN_DOWN       9
+#define MD_PIN_0_LEFT     10
+#define MD_PIN_0_RIGHT    11
+#define MD_PIN_START_C    12
+#define MD_PIN_A_B        13
 
 // Pin 2 can trigger interrupt, so lets use that for TH pin
 #define MD_PIN_TH         2
@@ -66,6 +83,9 @@ static hardwaremode_t mode = EMegaDrive;
 
 
 static bool inputs[INPUT_COUNT];
+
+static uint16_t inputBits;
+
 
 static const int pin_mapping[INPUT_COUNT] = {
                                     PIN_IN_UP,
@@ -165,6 +185,8 @@ void loop(void)
 
 
 // Mega Drive specific code...
+static volatile byte portB_out_TH0 = 0xff;
+static volatile byte portB_out_TH1 = 0xff;
 
 static void setupMegaDriveMode(void)
 {
@@ -172,42 +194,23 @@ static void setupMegaDriveMode(void)
   pinMode(MD_PIN_TH,INPUT);
 
   // Output pins
-  pinMode(MD_PIN_UP,OUTPUT);
-  pinMode(MD_PIN_DOWN,OUTPUT);
-  pinMode(MD_PIN_0_LEFT,OUTPUT);
-  pinMode(MD_PIN_0_RIGHT,OUTPUT);
-  pinMode(MD_PIN_A_B,OUTPUT);
-  pinMode(MD_PIN_START_C,OUTPUT);
-
+  // bit 0-5 of PORT B as outputs.
+  DDRB = 0x3F;
 }
 
-static void md_outputTH0()
+static inline void md_outputTH0()
 {
-  // TODO: output 1CBRLDU
-  digitalWrite(MD_PIN_A_B,inputs[5]);
-  digitalWrite(MD_PIN_START_C,inputs[6]);
-  digitalWrite(MD_PIN_0_RIGHT, inputs[3]);
-  digitalWrite(MD_PIN_0_LEFT, inputs[2]);
-  digitalWrite(MD_PIN_UP, inputs[0]);
-  digitalWrite(MD_PIN_DOWN, inputs[1]);
- // digitalWrite(MD_PIN_A_B, inputs[PIN_IN_BTN_B]);
-
+  PORTB = portB_out_TH0;
 }
 
-static void md_outputTH1()
+static inline void md_outputTH1()
 {
-  // TODO:output StartA00DU
-  digitalWrite( MD_PIN_A_B, inputs[PIN_IN_BTN_A]);
-  digitalWrite( MD_PIN_START_C, inputs[PIN_IN_BTN_START]);
-  digitalWrite( MD_PIN_0_RIGHT, 0);
-  digitalWrite( MD_PIN_0_LEFT, 0);
-  digitalWrite( MD_PIN_UP, inputs[PIN_IN_UP]);
-  digitalWrite( MD_PIN_DOWN, inputs[PIN_IN_DOWN]);
+  PORTB = portB_out_TH1;
 }
 
-static void ISR_megaDriveTH(void)
+ISR(PCINT0_vect)
 {
-  if(digitalRead(MD_PIN_TH))
+  if( PINC & (1u<<PINC2) )
   {
     md_outputTH1();
   }
@@ -217,11 +220,56 @@ static void ISR_megaDriveTH(void)
   }
 }
 
+/*
+We must prepare data to be written to ports
+in interrupt for timing.
+
+I'm worried that some Mega Drive games read
+back the values faster that we have time 
+to update the output pins. To minimize the time,
+the it takes to change the outputs, the 
+values to be written to the pins are prepared in advance.
+
+Pin mapping:
+
+Arduino pin     Atmega port bit
+    0           PIND0 rx
+    1           PIND1 tx
+    2           PIND2
+    3           PIND3
+    4           PIND4
+    5           PIND5
+    6           PIND6
+    7           PIND7
+    8           PINB0
+    9           PINB1
+    10          PINB2
+    11          PINB3
+    12          PINB4
+    13          PINB5
+
+*/
+
 
 static void runMegaDrive(void)
 {
-  // Everything Mega drive specific
-  // should be handled by interrupts.
+  byte pb_th0 = 0;
+  byte pb_th1 = 0;
+
+  if(inputBits&IN_MASK_UP)      pb_th0 |= 1u;
+  if(inputBits&IN_MASK_DOWN)    pb_th0 |= 2u;
+  pb_th1 = pb_th0;
+  if(inputBits&IN_MASK_A)       pb_th0 |= 16u;
+  if(inputBits&IN_MASK_START)   pb_th0 |= 32u;
+
+  if(inputBits&IN_MASK_LEFT)    pb_th1 |= 4u;
+  if(inputBits&IN_MASK_RIGHT)   pb_th1 |= 8u;
+
+  if(inputBits&IN_MASK_B)       pb_th1 |= 16u;
+  if(inputBits&IN_MASK_C)       pb_th1 |= 32u;
+
+  portB_out_TH0 = pb_th0;
+  portB_out_TH1 = pb_th1;
 
   // This is only for testing.
   md_outputTH0();
