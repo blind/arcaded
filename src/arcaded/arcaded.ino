@@ -81,11 +81,7 @@ static void ISR_megaDriveTH(void);
 
 static hardwaremode_t mode = EMegaDrive;
 
-
-static bool inputs[INPUT_COUNT];
-
 static uint16_t inputBits;
-
 
 static const int pin_mapping[INPUT_COUNT] = {
                                     PIN_IN_UP,
@@ -105,12 +101,15 @@ static const int pin_mapping[INPUT_COUNT] = {
 
 static void readInputs(void)
 {
-  bool *inputPtr = inputs;
   const int *pin = pin_mapping;
+  uint16_t mask = 1;
+  uint16_t bits = 0;
   for( int i = 0; i < INPUT_COUNT; ++i )
   {
-    *inputPtr++ = digitalRead(*pin++);
+    bits |= digitalRead(*pin++)?mask:0u;
+    mask <<=1;
   }
+  inputBits = bits;
 }
 
 static void setupInput(void)
@@ -131,8 +130,8 @@ static void setupInput(void)
   pinMode(PIN_IN_BTN_START,INPUT_PULLUP);
   pinMode(PIN_IN_BTN_MODE,INPUT_PULLUP);
 
-  for( int i = 0; i < INPUT_COUNT; ++i )
-    inputs[i] = true;
+  inputBits = 0xffffu;
+
 }
 
 
@@ -166,7 +165,6 @@ void loop(void)
   default:
     break;
   }
-
 
   hardwaremode_t newMode = checkMode();
 
