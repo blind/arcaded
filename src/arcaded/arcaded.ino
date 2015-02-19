@@ -200,16 +200,21 @@ static inline void md_outputTH1()
 ISR(INT0_vect,ISR_NAKED)
 {
   asm(" push    r24");
-  asm(" in      r24, 0x3f");
-  asm(" push    r24");
+
+  // I checked the CPU datasheet, and it seems that non of the 
+  // instructions used changes any flags in SREG, so there is
+  // no need saving it.
+//  asm(" in      r24, 0x3f");
+//  asm(" push    r24");
+
   asm(" sbis    0x06, 2"); // ; 6
   asm(" rjmp    .+6"); //             ; 0x22a <__vector_1+0x16>
   asm(" lds     r24, 0x0100"); //
   asm(" rjmp    .+4"); //             ; 0x22e <__vector_1+0x1a>
   asm(" lds     r24, 0x0101");
   asm(" out     0x05, r24"); //       ; 5
-  asm(" pop     r24"); 
-  asm(" out     0x3f, r24"); //        ; 63
+//  asm(" pop     r24"); 
+//  asm(" out     0x3f, r24"); //        ; 63
   asm(" pop     r24");
   asm(" reti");
 /*
