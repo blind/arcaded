@@ -10,7 +10,7 @@ Information on their interfaces can be found at http://gamesx.com/wiki/doku.php?
 ### Mega Drive
 This will be the base machine I will use for testing, I want to support it fully.
 
-The 6 button mode will be 
+After my initial tests it seems unlikely that the arduino is fast enough to support even the 3 button controller without extra hardware. I will probably use the 74HC157(?) what is used in the original controller.
 #### Buttons
 
  * 4 direction
@@ -22,7 +22,7 @@ Total number of buttons: 12
 
 #### Port
 
- * 5 data out
+ * 6 data out
  * 1 data in
  * +5V
  * Ground
@@ -57,7 +57,7 @@ Total number of buttons: 6
 
 ### Super Nintendo
 Support for this is far of in the future.
-
+The NES and SNES controller uses a serial protocol to read controllers. I hope the arduino is fast enough for that as well, or this will be a rather boring project.
 #### Buttons
  * 4 directions
  * 4 action buttons (A,B,X,Y)

@@ -14,19 +14,6 @@
 #define PIN_IN_BTN_MODE  7
 
 
-#define IDX_UP    0
-#define IDX_DOWN  1
-#define IDX_LEFT  2
-#define IDX_RIGHT 3
-#define IDX_A     4
-#define IDX_B     5
-#define IDX_C     6
-#define IDX_X     7
-#define IDX_Y     8
-#define IDX_Z     9
-#define IDX_START 10
-#define IDX_MODE  11
-
 
 #define IN_MASK_UP    (1u<<0)
 #define IN_MASK_DOWN  (1u<<1)
@@ -40,8 +27,6 @@
 #define IN_MASK_Z     (1u<<9)
 #define IN_MASK_START (1u<<10)
 #define IN_MASK_MODE  (1u<<11)
-
-
 
 #define INPUT_COUNT 12
 
@@ -191,6 +176,11 @@ static void setupMegaDriveMode(void)
   // Input pin
   pinMode(MD_PIN_TH,INPUT);
 
+
+  // Enable interrupt for PCINT18/INT0
+  EICRA = 0x1;  // ICS = 01 -> Trigger interrput on both flanks.
+  EIMSK = 0x1;  // Enable INT0.
+
   // Output pins
   // bit 0-5 of PORT B as outputs.
   DDRB = 0x3F;
@@ -206,8 +196,24 @@ static inline void md_outputTH1()
   PORTB = portB_out_TH1;
 }
 
-ISR(PCINT0_vect)
+// Mega Drive TH pin connected to PD2, which is INT0
+ISR(INT0_vect,ISR_NAKED)
 {
+  asm(" push    r24");
+  asm(" in      r24, 0x3f");
+  asm(" push    r24");
+  asm(" sbis    0x06, 2"); // ; 6
+  asm(" rjmp    .+6"); //             ; 0x22a <__vector_1+0x16>
+  asm(" lds     r24, 0x0100"); //
+  asm(" rjmp    .+4"); //             ; 0x22e <__vector_1+0x1a>
+  asm(" lds     r24, 0x0101");
+  asm(" out     0x05, r24"); //       ; 5
+  asm(" pop     r24"); 
+  asm(" out     0x3f, r24"); //        ; 63
+  asm(" pop     r24");
+  asm(" reti");
+/*
+  // Original version
   if( PINC & (1u<<PINC2) )
   {
     md_outputTH1();
@@ -216,6 +222,7 @@ ISR(PCINT0_vect)
   {
     md_outputTH0();
   }
+*/
 }
 
 /*
