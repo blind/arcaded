@@ -25,6 +25,8 @@ INP_Y1_BIT		equ (1<<9)
 INP_Z1_BIT		equ (1<<10)
 INP_MODE1_BIT	equ (1<<11)
 
+FONT_START_TILE	equ	20
+
 ;---------------------------------------------------------
 ;---------------------------------------------------------
 main:
@@ -40,12 +42,29 @@ main:
 	lea		tile_set,a1
 	move.w	#$8f02,4(a0)
 	move_vram_addr	0,4(a0)	; Load tileset at VRAM addr 0
-.copy_loop:
+.copy_tiles:
 	move.w	(a1)+,(a0)
 	cmpa.l	#tile_set_end,a1
-	blt.s	.copy_loop
+	blt.s	.copy_tiles
+
+	lea		font_set,a1
+	move_vram_addr	FONT_START_TILE*32,4(a0)	; Load tileset at VRAM addr 0
+.copy_font:
+	move.w	(a1)+,(a0)
+	cmpa.l	#font_end,a1
+	blt.s	.copy_font
 
 
+	; Fill plane B with background tile.
+	moveq	#7,d1
+	move_vram_addr	PLANE_B_ADDR,4(a0)	; Load tileset at VRAM addr 0
+	move.w	#(32*32)-1,d0
+.fill_plane_b:
+	move.w	d1,(a0)
+	dbra.w	d0,.fill_plane_b
+
+
+	; Palette
 	lea		VDP_BASE,a1
 	move.w	#$8f02,4(a1)	; set auto-increment to 2.
 	move.l	#$c0000000,4(a1)
@@ -67,9 +86,9 @@ main:
 	bsr		install_vbi_handler
 
 	move.w	#$2300,sr
-
-
 ; Initialize some 
+
+	move.w	#4,readback_delay
 
 ;---------------------------------------------------------
 
@@ -82,6 +101,8 @@ main_loop:
 	; --
 
 	bsr		read_controller
+
+	bsr		update_delay
 
 	; ----------
 	; Controller 1 
@@ -234,7 +255,6 @@ setup_sprites:
 	addq.w	#2,a0
 	dbra.w	d4,.alloc_sprites
 
-
 	lea	sprite_ids,a2
 
 	; sprite positions controller 1
@@ -283,7 +303,7 @@ setup_sprites:
 ;----------------------------------------------------
 ;----------------------------------------------------
 ; Read controller
-; Code copied from interwebs, haven't read up on 
+; Code copied from interwebs, haven''t read up on 
 ; _how_ it works, it just does.
 read_controller:
 	; Controller 1
@@ -296,6 +316,8 @@ read_controller:
 	and.b	(a0),d1			; 00SA00DU 
 	lsl.w	#2,d1			; make room for BCRL
 
+	move.w	readback_delay,d2	; default value 4
+
 	move.b	#$40,(a0)		; TH to high -> x1CBRLDU
 	move.w	#$003f,d0		; mask	
 	nop
@@ -303,26 +325,30 @@ read_controller:
 	and.b	(a0),d0			; read and mask
 	or.w	d1,d0
 
+	move.w	controller_1,d1
 	move.w	d0,controller_1
+	eor.w	d0,d1
+	move.w	d1,controller_1_x
 
 	; Controller 2
 
 	movea.l	#$a10005,a0
-	move.b	#0,(a0)			; TH to low...
 	move.w	#$0030,d1		; mask all but Start and A
-	nop
-	nop
-	and.b	(a0),d1			; 00SA00DU 
-
-	move.b	#$40,(a0)		; TH to high -> x1CBRLDU
-	move.w	#$003f,d0		; mask	
+	move.b	#0,(a0)			; TH to low...
+	lsl.l	d2,d3			; This one takes 8+n*2 cycles, default value 4 gives same as 4 nops
+	and.b	(a0),d1			; 00SA0000 -> d1 
 	lsl.w	#2,d1			; make room for BCRL
-	nop
+
+	move.w	#$003f,d0		; mask
+	move.b	#$40,(a0)		; TH to high -> x1CBRLDU
+	lsl.l	d2,d3			; This one takes 8+n*2 cycles, default value 4 gives same as 4 nops
 	and.b	(a0),d0			; read and mask
 	or.w	d1,d0
 
+	move.w	controller_2,d1
 	move.w	d0,controller_2
-
+	eor.w	d0,d1
+	move.w	d1,controller_2_x
 
 	rts
 
@@ -359,6 +385,83 @@ my_vbl_rout:
 	clr.w	vbl_flag
 	rte
 
+;---------------------------------------------------------
+;---------------------------------------------------------
+
+update_delay:
+	move.w	controller_1_x,d0
+	move.w	d0,d1
+	andi.w	#INP_UP1_BIT,d1
+	beq.s	.no_up_change
+	move.w	controller_1,d1
+	andi.w	#INP_UP1_BIT,d1
+	bne.s	.no_up_change
+
+	addi.w	#1,readback_delay
+
+.no_up_change
+	andi.w	#INP_DOWN1_BIT,d0
+	beq.s	.draw_text			; no change in down
+	moveq	#INP_DOWN1_BIT,d1
+	and.w	controller_1,d1
+	bne.s	.draw_text
+
+	subi.w	#1,readback_delay
+
+.draw_text
+	; TODO: Update text on screen.
+
+	lea		char_lut,a1
+	lea		VDP_BASE,a0
+	move.w	#$8f02,4(a0)
+	move_vram_addr	PLANE_A_ADDR+(32*10+10)*2,4(a0)
+
+	move.w	readback_delay,d0
+	rol.w	#4,d0
+	move.w	d0,d1
+	andi.w	#$f,d1
+	add.w	d1,d1
+	move.w	(a1,d1.w),(a0)
+
+	rol.w	#4,d0
+	move.w	d0,d1
+	andi.w	#$f,d1
+	add.w	d1,d1
+	move.w	(a1,d1.w),(a0)
+
+	rol.w	#4,d0
+	move.w	d0,d1
+	andi.w	#$f,d1
+	add.w	d1,d1
+	move.w	(a1,d1.w),(a0)
+
+	rol.w	#4,d0
+	move.w	d0,d1
+	andi.w	#$f,d1
+	add.w	d1,d1
+	move.w	(a1,d1.w),(a0)
+
+	rts
+
+
+char_lut:
+	dc.w	'0'+FONT_START_TILE-' '
+	dc.w	'1'+FONT_START_TILE-' '
+	dc.w	'2'+FONT_START_TILE-' '
+	dc.w	'3'+FONT_START_TILE-' '
+	dc.w	'4'+FONT_START_TILE-' '
+	dc.w	'5'+FONT_START_TILE-' '
+	dc.w	'6'+FONT_START_TILE-' '
+	dc.w	'7'+FONT_START_TILE-' '
+	dc.w	'8'+FONT_START_TILE-' '
+	dc.w	'9'+FONT_START_TILE-' '
+	dc.w	'A'+FONT_START_TILE-' '
+	dc.w	'B'+FONT_START_TILE-' '
+	dc.w	'C'+FONT_START_TILE-' '
+	dc.w	'D'+FONT_START_TILE-' '
+	dc.w	'E'+FONT_START_TILE-' '
+	dc.w	'F'+FONT_START_TILE-' '
+
 
 ;---------------------------------------------------------
 ;---------------------------------------------------------
@@ -378,14 +481,8 @@ palette_2:
 
 tile_set:
 
-	dc.l	$22220000
-	dc.l	$22220000
-	dc.l	$22220000
-	dc.l	$22220000
-	dc.l	$00002222
-	dc.l	$00002222
-	dc.l	$00002222
-	dc.l	$00002222
+	ds.l	8
+
 
 	dc.l	$00010000
 	dc.l	$00110000
@@ -432,8 +529,6 @@ tile_set:
 	dc.l	$01111100
 	dc.l	$00000000
 
-
-
 	dc.l	$01111100
 	dc.l	$11000110
 	dc.l	$11000000
@@ -442,6 +537,21 @@ tile_set:
 	dc.l	$11000110
 	dc.l	$01111100
 	dc.l	$00000000
+
+
+
+	dc.l	$22220000
+	dc.l	$22220000
+	dc.l	$22220000
+	dc.l	$22220000
+	dc.l	$00002222
+	dc.l	$00002222
+	dc.l	$00002222
+	dc.l	$00002222
+
+font_set:
+	incbin	font.bin
+font_end:
 
 
 controller_indicator_sprite_positions:
@@ -475,11 +585,11 @@ vdp_regs:
 	dc.w	$8704		; backgroud colour,  (reg 7)
 	dc.w	$8a00		; HBL IRQ controller
 	dc.w	$8b02		; Mode register 3
-	dc.w	$8c00		; mode register 4 (320 wide display)
+	dc.w	$8c00		; mode register 4 (32 cells wide display)
 	dc.w	$8d05		; HBL scroll data location (VRAM:$1400)
 	dc.w	$8e00		; nametable pattern gen base addr.
 	dc.w	$8f02		; auto-increment value
-	dc.w	$9001		; plane size
+	dc.w	$9000		; plane size 00 -> 32*32 cells.
 	dc.w	$9100		; window plane h-pos
 	dc.w	$9200		; window place v-pos
 vdp_regs_end:
@@ -495,7 +605,11 @@ vdp_regs_end:
 vbl_flag:		ds.w	1
 
 controller_1	ds.w	1
+controller_1_x	ds.w	1
 controller_2	ds.w	1
+controller_2_x	ds.w	1
+
+readback_delay	ds.w	1
 
 sprite_ids
 	ds.w	24		; 12 buttons per 6-btn controller.
