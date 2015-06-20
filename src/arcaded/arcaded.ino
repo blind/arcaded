@@ -87,7 +87,7 @@ static const int pin_mapping[INPUT_COUNT] = {
 static void readInputs(void)
 {
   const int *pin = pin_mapping;
-  uint16_t mask = 1;
+  uint16_t mask = 1u;
   uint16_t bits = 0;
   for( int i = 0; i < INPUT_COUNT; ++i )
   {
@@ -99,24 +99,11 @@ static void readInputs(void)
 
 static void setupInput(void)
 {
-  pinMode(PIN_IN_UP,INPUT_PULLUP);
-  pinMode(PIN_IN_DOWN,INPUT_PULLUP);
-  pinMode(PIN_IN_LEFT,INPUT_PULLUP);
-  pinMode(PIN_IN_RIGHT,INPUT_PULLUP);
-
-  pinMode(PIN_IN_BTN_A,INPUT_PULLUP);
-  pinMode(PIN_IN_BTN_B,INPUT_PULLUP);
-  pinMode(PIN_IN_BTN_C,INPUT_PULLUP);
-
-  pinMode(PIN_IN_BTN_X,INPUT_PULLUP);
-  pinMode(PIN_IN_BTN_Y,INPUT_PULLUP);
-  pinMode(PIN_IN_BTN_Z,INPUT_PULLUP);
-
-  pinMode(PIN_IN_BTN_START,INPUT_PULLUP);
-  pinMode(PIN_IN_BTN_MODE,INPUT_PULLUP);
-
+  for( uint8_t i = 0; i < INPUT_COUNT; ++i )
+  {
+    pinMode(pin_mapping[i],INPUT_PULLUP);
+  }
   inputBits = 0xffffu;
-
 }
 
 
@@ -176,9 +163,8 @@ static void setupMegaDriveMode(void)
   // Input pin
   pinMode(MD_PIN_TH,INPUT);
 
-
   // Enable interrupt for PCINT18/INT0
-  EICRA = 0x1;  // ICS = 01 -> Trigger interrput on both flanks.
+  EICRA = 0x1;  // ICS = 01 -> Trigger interrupt on both flanks.
   EIMSK = 0x1;  // Enable INT0.
 
   // Output pins
@@ -186,48 +172,18 @@ static void setupMegaDriveMode(void)
   DDRB = 0x3F;
 }
 
-static inline void md_outputTH0()
-{
-  PORTB = portB_out_TH0;
-}
-
-static inline void md_outputTH1()
-{
-  PORTB = portB_out_TH1;
-}
-
 // Mega Drive TH pin connected to PD2, which is INT0
 ISR(INT0_vect,ISR_NAKED)
 {
   asm(" push    r24");
-
-  // I checked the CPU datasheet, and it seems that non of the 
-  // instructions used changes any flags in SREG, so there is
-  // no need saving it.
-//  asm(" in      r24, 0x3f");
-//  asm(" push    r24");
-
-  asm(" sbis    0x06, 2"); // ; 6
-  asm(" rjmp    .+6"); //             ; 0x22a <__vector_1+0x16>
-  asm(" lds     r24, 0x0100"); //
-  asm(" rjmp    .+4"); //             ; 0x22e <__vector_1+0x1a>
-  asm(" lds     r24, 0x0101");
-  asm(" out     0x05, r24"); //       ; 5
-//  asm(" pop     r24"); 
-//  asm(" out     0x3f, r24"); //        ; 63
-  asm(" pop     r24");
-  asm(" reti");
-/*
-  // Original version
-  if( PINC & (1u<<PINC2) )
-  {
-    md_outputTH1();
-  }
-  else
-  {
-    md_outputTH0();
-  }
-*/
+  asm (" sbis    0x09, 2");     // Skip next if bit 2 in PORTD is HIGH
+  asm (" rjmp    .+6"); //             ; 0x22a <__vector_1+0x16>
+  asm volatile(" lds     r24, %0" : : "m" (portB_out_TH1) ); //
+  asm (" rjmp    .+4"); //             ; 0x22e <__vector_1+0x1a>
+  asm volatile(" lds     r24, %0" : : "m" (portB_out_TH0) );
+  asm (" out     0x05, r24"); //       ; 5
+  asm (" pop     r24");
+  asm (" reti");
 }
 
 /*
@@ -263,26 +219,24 @@ Arduino pin     Atmega port bit
 
 static void runMegaDrive(void)
 {
-  byte pb_th0 = 0;
-  byte pb_th1 = 0;
+  uint8_t pb_th0 = ~0x3fu;
+  uint8_t pb_th1 = ~0x3fu;
 
-  if(inputBits&IN_MASK_UP)      pb_th0 |= 1u;
-  if(inputBits&IN_MASK_DOWN)    pb_th0 |= 2u;
+  if(inputBits&IN_MASK_UP)      pb_th0 |= (1u<<0);
+  if(inputBits&IN_MASK_DOWN)    pb_th0 |= (1u<<1);
   pb_th1 = pb_th0;
-  if(inputBits&IN_MASK_A)       pb_th0 |= 16u;
-  if(inputBits&IN_MASK_START)   pb_th0 |= 32u;
+  if(inputBits&IN_MASK_START)   pb_th0 |= (1u<<4);
+  if(inputBits&IN_MASK_A)       pb_th0 |= (1u<<5);
 
-  if(inputBits&IN_MASK_LEFT)    pb_th1 |= 4u;
-  if(inputBits&IN_MASK_RIGHT)   pb_th1 |= 8u;
 
-  if(inputBits&IN_MASK_B)       pb_th1 |= 16u;
-  if(inputBits&IN_MASK_C)       pb_th1 |= 32u;
+  if(inputBits&IN_MASK_LEFT)    pb_th1 |= (1u<<2);
+  if(inputBits&IN_MASK_RIGHT)   pb_th1 |= (1u<<3);
+
+  if(inputBits&IN_MASK_C)       pb_th1 |= (1u<<4);
+  if(inputBits&IN_MASK_B)       pb_th1 |= (1u<<5);
 
   portB_out_TH0 = pb_th0;
   portB_out_TH1 = pb_th1;
-
-  // This is only for testing.
-  md_outputTH0();
 }
 
 

@@ -10,7 +10,6 @@ Information on their interfaces can be found at http://gamesx.com/wiki/doku.php?
 ### Mega Drive
 This will be the base machine I will use for testing, I want to support it fully.
 
-After my initial tests it seems unlikely that the arduino is fast enough to support even the 3 button controller without extra hardware. I will probably use the 74HC157(?) what is used in the original controller.
 #### Buttons
 
  * 4 direction
