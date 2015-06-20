@@ -387,8 +387,13 @@ my_vbl_rout:
 
 ;---------------------------------------------------------
 ;---------------------------------------------------------
-
 update_delay:
+
+	move.w	controller_1,d1
+
+	andi.w	#INP_START1_BIT,d1
+	bne.s	.draw_text
+
 	move.w	controller_1_x,d0
 	move.w	d0,d1
 	andi.w	#INP_UP1_BIT,d1
