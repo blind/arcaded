@@ -1,5 +1,5 @@
 # Arcaded
-Building myself an arcade stick to support different types of consoles/computers. The plan is to find a fitting micro controller (with enough GPIO pin) to handle the interface with the different machines.
+Building myself an arcade stick to support different types of consoles/computers. Right now it's using a Arduino nano to interface with the consoles.
 
 ## Machines
 These are the machines I want to support.
@@ -88,3 +88,11 @@ The plan is to use an Arduino nano for reading input and communicating with the 
 The number of required pins for output differentiate between platforms. The Mega Drive requires 6 data pins, the Super Nintendo only have 3 data pins. 
 
 Two of the IO-pins on the Arduino nano can trigger interrupts, so preferably these should be used for input from the hardware, especially for SNES/NES and Mega Drive.
+
+## References
+ * http://deskthority.net/wiki/Atari_interface
+ * http://applause.elfmimi.jp/md6bpad-e.html
+ * http://www.cs.cmu.edu/~chuck/infopg/segasix.txt
+ * http://gamesx.com/wiki/doku.php?do=index&id=controls
+
+
