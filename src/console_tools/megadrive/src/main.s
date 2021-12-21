@@ -25,7 +25,7 @@ INP_Y1_BIT		equ (1<<9)
 INP_Z1_BIT		equ (1<<10)
 INP_MODE1_BIT	equ (1<<11)
 
-FONT_START_TILE	equ	20
+FONT_START_TILE	equ	((font_set-tile_set)>>5)
 
 ;---------------------------------------------------------
 ;---------------------------------------------------------
@@ -86,14 +86,14 @@ main:
 	bsr		install_vbi_handler
 
 	move.w	#$2300,sr
-; Initialize some 
+; Initialize some
 
 	move.w	#4,readback_delay
 
 ;---------------------------------------------------------
 
 main_loop:
-	; 
+	;
 	bsr		wait_vbl
 	; directly after vbl, we need to start DMA
 	bsr		dma_execute_queue
@@ -105,13 +105,13 @@ main_loop:
 	bsr		update_delay
 
 	; ----------
-	; Controller 1 
+	; Controller 1
 	lea		sprite_ids,a2
 	move.w	controller_1,d2
 	bsr		update_controller_sprites
 
 	; Controller 2
-	lea		sprite_ids+20,a2
+	lea		sprite_ids+24,a2
 	move.w	controller_2,d2
 	bsr		update_controller_sprites
 
@@ -222,10 +222,43 @@ update_controller_sprites:
 
 	bsr.w	sprt_add_to_render
 
+	; Z
+	move.w	(a2)+,d0
+	bsr		sprt_get_attribute_ptr
+	move.w	d2,d1
+	andi.w	#INP_Z1_BIT,d1
+	bsr		colorize_if_zero
+
+	bsr.w	sprt_add_to_render
+
+	; Y
+	move.w	(a2)+,d0
+	bsr		sprt_get_attribute_ptr
+	move.w	d2,d1
+	andi.w	#INP_Y1_BIT,d1
+	bsr		colorize_if_zero
+
+	bsr.w	sprt_add_to_render
+
+	; X
+	move.w	(a2)+,d0
+	bsr		sprt_get_attribute_ptr
+	move.w	d2,d1
+	andi.w	#INP_X1_BIT,d1
+	bsr		colorize_if_zero
+
+	bsr.w	sprt_add_to_render
+
+	; mode
+	move.w	(a2)+,d0
+	bsr		sprt_get_attribute_ptr
+	move.w	d2,d1
+	andi.w	#INP_MODE1_BIT,d1
+	bsr		colorize_if_zero
+
+	bsr.w	sprt_add_to_render
 
 	rts
-
-
 
 
 ;---------------------------------------------------------
@@ -245,12 +278,11 @@ setup_sprites:
 	; ----------
 	; Setup code
 
-	; Since sprt_alloc is not implemented correctly, 
+	; Since sprt_alloc is not implemented as planned,
 	; we must allocate each sprite manually.
 	moveq	#24-1,d4
 	lea		sprite_ids,a0
 .alloc_sprites
-	move.w	#12*2,d0
 	bsr		sprt_alloc
 	addq.w	#2,a0
 	dbra.w	d4,.alloc_sprites
@@ -260,7 +292,7 @@ setup_sprites:
 	; sprite positions controller 1
 
 	lea controller_indicator_sprite_positions,a1
-	moveq	#10-1,d4
+	moveq	#12-1,d4
 .sprite_pos_setup
 	move.w	(a2)+,d0
 	bsr.w	sprt_get_attribute_ptr
@@ -281,7 +313,7 @@ setup_sprites:
 	; sprite positions controller 2
 
 	lea controller_indicator_sprite_positions,a1
-	moveq	#10-1,d4
+	moveq	#12-1,d4
 .sprite_pos_setup2
 	move.w	(a2)+,d0
 	bsr.w	sprt_get_attribute_ptr
@@ -303,27 +335,12 @@ setup_sprites:
 ;----------------------------------------------------
 ;----------------------------------------------------
 ; Read controller
-; Code copied from interwebs, haven''t read up on 
-; _how_ it works, it just does.
+
 read_controller:
 	; Controller 1
 
 	movea.l	#$a10003,a0
-	move.b	#0,(a0)			; TH to low...
-	move.w	#$0030,d1		; mask all but Start and A
-	nop
-	nop
-	and.b	(a0),d1			; 00SA00DU 
-	lsl.w	#2,d1			; make room for BCRL
-
-	move.w	readback_delay,d2	; default value 4
-
-	move.b	#$40,(a0)		; TH to high -> x1CBRLDU
-	move.w	#$003f,d0		; mask	
-	nop
-	nop
-	and.b	(a0),d0			; read and mask
-	or.w	d1,d0
+	bsr.s	read_controller_port
 
 	move.w	controller_1,d1
 	move.w	d0,controller_1
@@ -331,19 +348,8 @@ read_controller:
 	move.w	d1,controller_1_x
 
 	; Controller 2
-
 	movea.l	#$a10005,a0
-	move.w	#$0030,d1		; mask all but Start and A
-	move.b	#0,(a0)			; TH to low...
-	lsl.l	d2,d3			; This one takes 8+n*2 cycles, default value 4 gives same as 4 nops
-	and.b	(a0),d1			; 00SA0000 -> d1 
-	lsl.w	#2,d1			; make room for BCRL
-
-	move.w	#$003f,d0		; mask
-	move.b	#$40,(a0)		; TH to high -> x1CBRLDU
-	lsl.l	d2,d3			; This one takes 8+n*2 cycles, default value 4 gives same as 4 nops
-	and.b	(a0),d0			; read and mask
-	or.w	d1,d0
+	bsr.s	read_controller_port
 
 	move.w	controller_2,d1
 	move.w	d0,controller_2
@@ -353,10 +359,79 @@ read_controller:
 	rts
 
 
+read_controller_port:
+	; expects a0 to be setup to point to the correct controller port
+	move.b	#0,(a0)			; TH to low...
+	nop
+	nop
+	move.b	(a0),d0			; 00SA00DU
+	lsl.w	#8,d0			; make room for BCRL
+
+	move.b	#$40,(a0)		; TH to high -> x1CBRLDU
+	nop
+	nop
+	move.b	(a0),d0			; read
+
+	; read 6 button controller
+
+	move.b	#0,(a0)			; TH to low...
+	nop
+	nop
+	move.b	(a0),d1			; 00SA00DU
+	; lsl.w	#8,d1			; make room for BCRL
+
+	move.b	#$40,(a0)		; TH to high -> x1CBRLDU
+	nop
+	nop
+	; move.b	(a0),d1			; read and mask
+
+	; Third time will get the extra buttons
+	move.b	#0,(a0)			; TH to low...
+	nop
+	nop
+	move.b	(a0),d2			; 00SA0000
+	lsl.w	#8,d1			; make room for BCRL
+
+	move.b	#$40,(a0)		; TH to high -> x1CBmxyz
+	nop
+	nop
+	move.b	(a0),d1			; read and mask
+
+	; Last time, to check if bit 2 and 3 when TH is low is set
+	; then we have a 6 button controller
+
+	move.b	#0,(a0)			; TH to low...
+	nop
+	nop
+	move.b	(a0),d2			; 00SA11xx
+	lsl.w	#8,d2			; make room for BCRL
+
+	move.b	#$40,(a0)		; TH to high -> x1CBmxyz
+	nop
+	nop
+	move.b	(a0),d2			; read and mask
+
+	andi.w	#$0c00,d2
+	bne.s	.yes
+	move.w	#-1,d1
+.yes
+	move.w	d0,d2
+	and.w	#$3f,d0
+	lsr.w	#6,d2
+	andi.w	#$c0,d2
+	or.w	d2,d0
+
+	andi.w	#$0f,d1
+	lsl.w	#8,d1
+	or.w	d1,d0
+
+	rts
+
+
 controller_init:
 	moveq	#$40,d0		; bit mask for controller init.
 	; Init code from sgdk, converted to assembler by me.
-	
+
 	lea		$a10009,a0
 	move.b	d0,(a0)
 	move.b	d0,2(a0)
@@ -488,7 +563,7 @@ tile_set:
 
 	ds.l	8
 
-
+	; 1
 	dc.l	$00010000
 	dc.l	$00110000
 	dc.l	$01110000
@@ -543,29 +618,69 @@ tile_set:
 	dc.l	$01111100
 	dc.l	$00000000
 
+	; 7 is background
+	dc.l	$22220000
+	dc.l	$22220000
+	dc.l	$22220000
+	dc.l	$22220000
+	dc.l	$00002222
+	dc.l	$00002222
+	dc.l	$00002222
+	dc.l	$00002222
 
 
-	dc.l	$22220000
-	dc.l	$22220000
-	dc.l	$22220000
-	dc.l	$22220000
-	dc.l	$00002222
-	dc.l	$00002222
-	dc.l	$00002222
-	dc.l	$00002222
+	; 8,9,10 is XYZ, 11 is mode
+
+	dc.l	$11000110
+	dc.l	$11000110
+	dc.l	$01101100
+	dc.l	$00111000
+	dc.l	$01101100
+	dc.l	$11000110
+	dc.l	$11000110
+	dc.l	$00000000
+
+	dc.l	$11000110
+	dc.l	$11000110
+	dc.l	$11000110
+	dc.l	$01101100
+	dc.l	$00111000
+	dc.l	$00111000
+	dc.l	$00111000
+	dc.l	$00000000
+
+	dc.l	$11111110
+	dc.l	$00001100
+	dc.l	$00011000
+	dc.l	$00110000
+	dc.l	$01100000
+	dc.l	$11000000
+	dc.l	$11111110
+	dc.l	$00000000
+
+	dc.l	$00000000
+	dc.l	$00000000
+	dc.l	$00000000
+	dc.l	$01101100
+	dc.l	$10010010
+	dc.l	$10010010
+	dc.l	$10010010
+	dc.l	$00000000
+
+
 
 font_set:
 	incbin	font.bin
 font_end:
 
+tile_set_end:
 
 controller_indicator_sprite_positions:
 	;        x   y   pattern
-	dc.w	32,24,2	 		; Up 
+	dc.w	32,24,2	 		; Up
 	dc.w	32,40,2|(1<<12)	; Down
 	dc.w	24,32,1			; Left
 	dc.w	40,32,1|(1<<11)	; Right
-
 
 	dc.w	56,32,3			; A
 	dc.w	64,32,4			; B
@@ -573,9 +688,12 @@ controller_indicator_sprite_positions:
 
 	dc.w	56,16,6			; Start
 
+	dc.w	56,42,8			; X
+	dc.w	64,42,9			; Y
+	dc.w	72,42,10		; Z
 
+	dc.w	66,16,11		; Mode
 
-tile_set_end:
 
 ; http://md.squee.co/wiki/VDP
 vdp_regs:
@@ -585,7 +703,7 @@ vdp_regs:
 	dc.w	$830c						; window table location -  VRAM:$3000
 	dc.w	$8400+(PLANE_B_ADDR>>13)	; plane b table location
 	dc.w	$8500+(SPR_ATTR_ADDR>>9)	; sprite table location
-	dc.w	$8600						; sprite pattern generator base addr. 
+	dc.w	$8600						; sprite pattern generator base addr.
 						; (should be 0, only used on modified machines with more VRAM)
 	dc.w	$8704		; backgroud colour,  (reg 7)
 	dc.w	$8a00		; HBL IRQ controller

@@ -56,7 +56,7 @@ sprt_render:
 .loop
 	moveq	#0,d0
 	move.b	(a0)+,d0				; Get sprite index to draw
-	move.b	d0,SPRT_link(a1,d1.w)	; 
+	move.b	d0,SPRT_link(a1,d1.w)	;
 	move.w	d0,d1
 	lsl.w	#3,d1					; New offset
 .test
@@ -80,11 +80,9 @@ sprt_render:
 
 
 ;---------------------------------------------------------
-; Allocate sprite 
-; params: d0.w - Number of sprites wanted.
-;         a0.l - Address where sprite ids will be stored.
-; return: d0.w - Number of sprites allocated
-;				 This value * 4 bytes written to a0
+; Allocate sprite
+; params: a0.l - Address where sprite id will be stored.
+; return: d0.w - Id of allocated sprite
 ;---------------------------------------------------------
 sprt_alloc:
 
@@ -95,7 +93,7 @@ sprt_alloc:
 	rts
 .not_empty
 	lea		_sprt_free_sprt_stack,a1
-	move.w	#0,d0
+	moveq	#0,d0
 	move.b	(a1,d1.w),d0
 	subq.w	#1,d1
 	move.w	d1,_sprt_free_stack_idx
@@ -104,8 +102,8 @@ sprt_alloc:
 	rts
 
 ;---------------------------------------------------------
-; Delloc sprite 
-; params: d0.w - Sprite to dealloc, no test are made to see 
+; Delloc sprite
+; params: d0.w - Sprite to dealloc, no test are made to see
 ;                if the sprite was already released
 ;---------------------------------------------------------
 sprt_release:
@@ -119,7 +117,7 @@ sprt_release:
 
 
 ;---------------------------------------------------------
-; Dealloc many sprite 
+; Dealloc many sprite
 ; params: d0.w - Number of sprites to dealloc, no test are
 ;                made to see if the sprite was already released
 ;         a0.l - poiner to first sprite to release.
