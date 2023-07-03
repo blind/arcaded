@@ -1,4 +1,6 @@
 // Using PORT C and PORT D for inputs.
+#include <stdint.h>
+
 
 #define PIN_IN_UP  A0
 #define PIN_IN_DOWN  A1
